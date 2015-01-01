@@ -12,6 +12,8 @@ import (
 	"io"
 	"net/http"
 	"errors"
+	"io/ioutil"
+	"reflect"
 
 	"github.com/lunny/tango"
 	"github.com/oxtoacart/bpool"
@@ -246,7 +248,7 @@ func loadTemplates(basePath string, exts []string, funcMap template.FuncMap) (ma
 			return err
 		}
 
-		ext := getExt(r)
+		ext := filepath.Ext(r)
 		var extRight bool
 		for _, extension := range exts {
 			if ext != extension {
@@ -348,7 +350,7 @@ func add(basePath, path string) error {
 	for _, raw := range re_templateTag.FindAllString(nt.Src, -1) {
 		parsed := re_templateTag.FindStringSubmatch(raw)
 		templatePath := parsed[1]
-		ext := getExt(templatePath)
+		ext := filepath.Ext(templatePath)
 		if !strings.Contains(templatePath, ext) {
 			regularTemplateDefs = append(regularTemplateDefs, templatePath)
 			continue
@@ -359,4 +361,37 @@ func add(basePath, path string) error {
 	}
 
 	return nil
+}
+
+func isNil(a interface{}) bool {
+	if a == nil {
+		return true
+	}
+	aa := reflect.ValueOf(a)
+	return !aa.IsValid() || (aa.Type().Kind() == reflect.Ptr && aa.IsNil())
+}
+
+func generateTemplateName(base, path string) string {
+	return filepath.ToSlash(path[len(base)+1:])
+}
+
+func file_content(path string) (string, error) {
+	// Read the file content of the template
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	b, err := ioutil.ReadAll(file)
+	if err != nil {
+		return "", err
+	}
+	s := string(b)
+
+	if len(s) < 1 {
+		return "", errors.New("render: template file is empty")
+	}
+
+	return s, nil
 }
