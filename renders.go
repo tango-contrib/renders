@@ -213,7 +213,8 @@ var (
 	regularTemplateDefs []string
 	lock                sync.Mutex
 	re_defineTag        = regexp.MustCompile("{{ ?define \"([^\"]*)\" ?\"?([a-zA-Z0-9]*)?\"? ?}}")
-	re_templateTag      = regexp.MustCompile("{{ ?template \"([^\"]*)\" ?([^ ]*)? ?}}")
+	//re_templateTag      = regexp.MustCompile("{{ ?template \"([^\"]*)\" ?([^ ]*)? ?}}")
+	re_templateTag      = regexp.MustCompile("{{[ ]*template[ ]+\"([^\"]+)\"")
 )
 
 type namedTemplate struct {
