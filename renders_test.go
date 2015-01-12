@@ -122,6 +122,59 @@ func TestRender_2(t *testing.T) {
 	expect(t, beforeAndAfter, "before test1.html after test1.html")
 }
 
+type Render3Action struct {
+	Renderer
+}
+
+func (a *Render3Action) Get() error {
+	return a.Render("admin/home.html", nil)
+}
+
+func TestRender_3(t *testing.T) {
+	buff := bytes.NewBufferString("")
+	recorder := httptest.NewRecorder()
+	recorder.Body = buff
+
+	o := tango.Classic()
+	o.Use(New())
+	o.Get("/", new(Render3Action))
+
+	req, err := http.NewRequest("GET", "http://localhost:3000/", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	o.ServeHTTP(recorder, req)
+	expect(t, recorder.Code, http.StatusOK)
+	expect(t, buff.String(), "admin")
+}
+
+type Render4Action struct {
+	Renderer
+}
+
+func (a *Render4Action) Get() error {
+	return a.Render("admin\\home.html", nil)
+}
+
+func TestRender_4(t *testing.T) {
+	buff := bytes.NewBufferString("")
+	recorder := httptest.NewRecorder()
+	recorder.Body = buff
+
+	o := tango.Classic()
+	o.Use(New())
+	o.Get("/", new(Render4Action))
+
+	req, err := http.NewRequest("GET", "http://localhost:3000/", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	o.ServeHTTP(recorder, req)
+	expect(t, recorder.Code, http.StatusOK)
+	expect(t, buff.String(), "admin")
+}
 
 /* Test Helpers */
 func expect(t *testing.T, a interface{}, b interface{}) {

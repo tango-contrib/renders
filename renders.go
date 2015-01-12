@@ -194,7 +194,7 @@ func (r *Renderer) StatusRender(status int, name string, binding interface{}) er
 }
 
 func (r *Renderer) Template(name string) *template.Template {
-	return r.t[filepath.ToSlash(name)]
+	return r.t[alignTmplName(name)]
 }
 
 func (r *Renderer) execute(name string, binding interface{}) (*bytes.Buffer, error) {
@@ -209,7 +209,10 @@ func (r *Renderer) execute(name string, binding interface{}) (*bytes.Buffer, err
 	if r.after != nil {
 		defer r.after(name)
 	}
-	if rt, ok := r.t[filepath.ToSlash(name)]; ok {
+
+	name = alignTmplName(name)
+
+	if rt, ok := r.t[name]; ok {
 		return buf, rt.ExecuteTemplate(buf, name, binding)
 	}
 	return nil, errors.New("template is not exist")
@@ -239,6 +242,12 @@ func Load(opt Options) (map[string]*template.Template, error) {
 // a custom template.FuncMap into each template
 func LoadWithFuncMap(opt Options) (map[string]*template.Template, error) {
 	return loadTemplates(opt.Directory, opt.Extensions, opt.Funcs)
+}
+
+func alignTmplName(name string) string {
+	name = strings.Replace(name, "\\\\", "/", -1)
+	name = strings.Replace(name, "\\", "/", -1)
+	return name
 }
 
 func loadTemplates(basePath string, exts []string, funcMap template.FuncMap) (map[string]*template.Template, error) {
@@ -381,7 +390,7 @@ func isNil(a interface{}) bool {
 }
 
 func generateTemplateName(base, path string) string {
-	return filepath.ToSlash(path[len(base)+1:])
+	return alignTmplName(path[len(base)+1:])
 }
 
 func file_content(path string) (string, error) {
