@@ -1,19 +1,19 @@
 package renders
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"html/template"
+	"io"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
-	"bytes"
-	"io"
-	"net/http"
-	"errors"
-	"io/ioutil"
-	"reflect"
 
 	"github.com/lunny/tango"
 	"github.com/oxtoacart/bpool"
@@ -51,8 +51,8 @@ type Options struct {
 
 type Renders struct {
 	Options
-	cs string
-	pool *bpool.BufferPool
+	cs        string
+	pool      *bpool.BufferPool
 	templates map[string]*template.Template
 }
 
@@ -63,9 +63,9 @@ func New(options ...Options) *Renders {
 		panic(err)
 	}
 	return &Renders{
-		Options: opt,
-		cs: prepareCharset(opt.Charset),
-		pool: bpool.NewBufferPool(64),
+		Options:   opt,
+		cs:        prepareCharset(opt.Charset),
+		pool:      bpool.NewBufferPool(64),
 		templates: t,
 	}
 }
@@ -77,6 +77,7 @@ type IRenderer interface {
 type Renderer struct {
 	*renderer
 }
+
 func (r *Renderer) SetRenderer(render *renderer) {
 	r.renderer = render
 }
@@ -112,14 +113,15 @@ func (r *Renders) Handle(ctx *tango.Context) {
 			}
 
 			rd.SetRenderer(&renderer{
-				renders: r,
-				Context: ctx,
-				action: action,
-				before: before,
-				after: after,
-				t: templates,
-				opt: r.Options,
+				renders:         r,
+				Context:         ctx,
+				action:          action,
+				before:          before,
+				after:           after,
+				t:               templates,
+				opt:             r.Options,
 				compiledCharset: r.cs,
+				Funcs:           make(template.FuncMap),
 			})
 		}
 	}
@@ -164,12 +166,13 @@ func prepareOptions(options []Options) Options {
 
 type renderer struct {
 	*tango.Context
-	renders *Renders
-	action interface{}
-	before, after func(string)
+	renders         *Renders
+	action          interface{}
+	before, after   func(string)
 	t               map[string]*template.Template
 	opt             Options
 	compiledCharset string
+	Funcs           template.FuncMap
 }
 
 func (r *Renderer) Render(name string, binding interface{}) error {
@@ -191,10 +194,14 @@ func (r *Renderer) StatusRender(status int, name string, binding interface{}) er
 }
 
 func (r *Renderer) Template(name string) *template.Template {
-	return r.t[name]
+	return r.t[filepath.ToSlash(name)]
 }
 
 func (r *Renderer) execute(name string, binding interface{}) (*bytes.Buffer, error) {
+	if len(r.Funcs) > 0 {
+		// TODO:
+	}
+
 	buf := r.renders.pool.Get()
 	if r.before != nil {
 		r.before(name)
@@ -202,7 +209,7 @@ func (r *Renderer) execute(name string, binding interface{}) (*bytes.Buffer, err
 	if r.after != nil {
 		defer r.after(name)
 	}
-	if rt, ok := r.t[name]; ok {
+	if rt, ok := r.t[filepath.ToSlash(name)]; ok {
 		return buf, rt.ExecuteTemplate(buf, name, binding)
 	}
 	return nil, errors.New("template is not exist")
@@ -213,9 +220,9 @@ var (
 	regularTemplateDefs []string
 	lock                sync.Mutex
 	//re_defineTag        = regexp.MustCompile("{{ ?define \"([^\"]*)\" ?\"?([a-zA-Z0-9]*)?\"? ?}}")
-	re_defineTag        = regexp.MustCompile("{{[ ]*define[ ]+\"([^\"]+)\"")
+	re_defineTag = regexp.MustCompile("{{[ ]*define[ ]+\"([^\"]+)\"")
 	//re_templateTag      = regexp.MustCompile("{{ ?template \"([^\"]*)\" ?([^ ]*)? ?}}")
-	re_templateTag      = regexp.MustCompile("{{[ ]*template[ ]+\"([^\"]+)\"")
+	re_templateTag = regexp.MustCompile("{{[ ]*template[ ]+\"([^\"]+)\"")
 )
 
 type namedTemplate struct {
