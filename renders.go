@@ -27,9 +27,19 @@ const (
 	defaultCharset = "UTF-8"
 )
 
-// Provides a temporary buffer to execute templates into and catch errors.
-
+// Provides a common buffer to execute templates.
 type T map[string]interface{}
+
+func (t T) Merge(at T) T {
+	if len(at) <= 0 {
+		return t
+	}
+
+	for k, v := range at {
+		t[k] = v
+	}
+	return t
+}
 
 // Options is a struct for specifying configuration options for the render.Renderer middleware
 type Options struct {
@@ -175,11 +185,21 @@ type renderer struct {
 	Funcs           template.FuncMap
 }
 
-func (r *Renderer) Render(name string, binding interface{}) error {
-	return r.StatusRender(http.StatusOK, name, binding)
+// Render a template
+//     r.Render("index.html")
+//     r.Render("index.html", renders.T{
+//                "name": value,
+//           })
+func (r *Renderer) Render(name string, bindings ...interface{}) error {
+	return r.StatusRender(http.StatusOK, name, bindings...)
 }
 
-func (r *Renderer) StatusRender(status int, name string, binding interface{}) error {
+func (r *Renderer) StatusRender(status int, name string, bindings ...interface{}) error {
+	var binding interface{}
+	if len(bindings) > 0 {
+		binding = bindings[0]
+	}
+
 	buf, err := r.execute(name, binding)
 	if err != nil {
 		return err
@@ -199,7 +219,8 @@ func (r *Renderer) Template(name string) *template.Template {
 
 func (r *Renderer) execute(name string, binding interface{}) (*bytes.Buffer, error) {
 	if len(r.Funcs) > 0 {
-		// TODO:
+		// TODO: if has temprory funcs, then should recompile templates,
+		// but the performance is lower.
 	}
 
 	buf := r.renders.pool.Get()
