@@ -124,12 +124,11 @@ func (r *Renders) Handle(ctx *tango.Context) {
 
 			rd.SetRenderer(&renderer{
 				renders:         r,
-				Context:         ctx,
-				action:          action,
+				ctx:             ctx,
 				before:          before,
 				after:           after,
 				t:               templates,
-				opt:             r.Options,
+				HTMLContentType: r.Options.HTMLContentType,
 				compiledCharset: r.cs,
 				Funcs:           make(template.FuncMap),
 			})
@@ -175,13 +174,13 @@ func prepareOptions(options []Options) Options {
 }
 
 type renderer struct {
-	*tango.Context
+	ctx             *tango.Context
 	renders         *Renders
-	action          interface{}
 	before, after   func(string)
 	t               map[string]*template.Template
-	opt             Options
 	compiledCharset string
+	Charset         string
+	HTMLContentType string
 	Funcs           template.FuncMap
 }
 
@@ -199,18 +198,31 @@ func (r *Renderer) StatusRender(status int, name string, bindings ...interface{}
 	if len(bindings) > 0 {
 		binding = bindings[0]
 	}
+	if t, ok := binding.(T); ok {
+		binding = t.Merge(r.renders.Options.Vars)
+	}
 
 	buf, err := r.execute(name, binding)
 	if err != nil {
 		return err
 	}
 
+	var cs string
+	if len(r.Charset) > 0 {
+		cs = prepareCharset(r.Charset)
+	} else {
+		cs = r.compiledCharset
+	}
 	// template rendered fine, write out the result
-	r.Header().Set(ContentType, r.opt.HTMLContentType+r.compiledCharset)
-	r.WriteHeader(status)
-	_, err = io.Copy(r, buf)
+	r.ctx.Header().Set(ContentType, r.HTMLContentType+cs)
+	r.ctx.WriteHeader(status)
+	_, err = io.Copy(r.ctx.ResponseWriter, buf)
 	r.renders.pool.Put(buf)
 	return err
+}
+
+func funcSignature(f interface{}) string {
+	return fmt.Sprintf("%x", f)
 }
 
 func (r *Renderer) Template(name string) *template.Template {
