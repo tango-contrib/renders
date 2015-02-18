@@ -100,6 +100,63 @@ type After interface {
 	AfterRender(string)
 }
 
+func (r *Renders) RenderString(name string, bindings ...interface{}) (string, error) {
+	buf, err := r.RenderBytes(name, bindings...)
+	if err != nil {
+		return "", err
+	}
+	return string(buf), nil
+}
+
+func (r *Renders) RenderBytes(name string, bindings ...interface{}) ([]byte, error) {
+	buf := new(bytes.Buffer)
+	err := r.Render(buf, name, bindings...)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (r *Renders) Render(w io.Writer, name string, bindings ...interface{}) error {
+	var binding interface{}
+	if len(bindings) > 0 {
+		binding = bindings[0]
+	}
+	if t, ok := binding.(T); ok {
+		binding = t.Merge(r.Options.Vars)
+	}
+
+	if r.Reload {
+		var err error
+		// recompile for easy development
+		r.templates, err = compile(r.Options)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	buf, err := r.execute(name, binding)
+	if err != nil {
+		return err
+	}
+
+	// template rendered fine, write out the result
+	_, err = io.Copy(w, buf)
+	r.pool.Put(buf)
+	return err
+}
+
+func (r *Renders) execute(name string, binding interface{}) (*bytes.Buffer, error) {
+	buf := r.pool.Get()
+
+	name = alignTmplName(name)
+
+	if rt, ok := r.templates[name]; ok {
+		return buf, rt.ExecuteTemplate(buf, name, binding)
+	}
+	return nil, errors.New("template is not exist")
+}
+
 func (r *Renders) Handle(ctx *tango.Context) {
 	if action := ctx.Action(); action != nil {
 		if rd, ok := action.(IRenderer); ok {
@@ -222,7 +279,19 @@ func (r *Renderer) StatusRender(status int, name string, bindings ...interface{}
 }
 
 func funcSignature(f interface{}) string {
-	return fmt.Sprintf("%x", f)
+	return fmt.Sprintf("%v", f)
+}
+
+var (
+	sigTemplates map[string]*template.Template
+)
+
+func signature(funcs template.FuncMap) string {
+	var sig string
+	for k, f := range funcs {
+		fmt.Sprintf("%s-%v", k, f)
+	}
+	return sig
 }
 
 func (r *Renderer) Template(name string) *template.Template {
