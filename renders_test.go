@@ -1,11 +1,11 @@
 package renders
 
 import (
-	"testing"
 	"bytes"
 	"net/http"
-	"reflect"
 	"net/http/httptest"
+	"reflect"
+	"testing"
 
 	"github.com/lunny/tango"
 )
@@ -94,7 +94,7 @@ func (a *Render2Action) Get() error {
 }
 
 func (a *Render2Action) BeforeRender(name string) {
-	beforeAndAfter += "before "+ name
+	beforeAndAfter += "before " + name
 }
 
 func (a *Render2Action) AfterRender(name string) {
@@ -163,7 +163,9 @@ func TestRender_4(t *testing.T) {
 	recorder.Body = buff
 
 	o := tango.Classic()
-	o.Use(New())
+	o.Use(New(Options{
+		Directory: "../renders/templates",
+	}))
 	o.Get("/", new(Render4Action))
 
 	req, err := http.NewRequest("GET", "http://localhost:3000/", nil)

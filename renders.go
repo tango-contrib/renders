@@ -358,12 +358,14 @@ func loadTemplates(basePath string, exts []string, funcMap template.FuncMap) (ma
 
 	templates := make(map[string]*template.Template)
 
-	err := filepath.Walk(basePath, func(path string, fi os.FileInfo, err error) error {
+	rootPath, _ := filepath.Abs(basePath)
+
+	err := filepath.Walk(rootPath, func(path string, fi os.FileInfo, err error) error {
 		if fi == nil || fi.IsDir() {
 			return nil
 		}
 
-		r, err := filepath.Rel(basePath, path)
+		r, err := filepath.Rel(rootPath, path)
 		if err != nil {
 			return err
 		}
@@ -381,7 +383,7 @@ func loadTemplates(basePath string, exts []string, funcMap template.FuncMap) (ma
 			return nil
 		}
 
-		if err := add(basePath, path); err != nil {
+		if err := add(rootPath, path); err != nil {
 			panic(err)
 		}
 
@@ -427,7 +429,7 @@ func loadTemplates(basePath string, exts []string, funcMap template.FuncMap) (ma
 			template.Must(currentTmpl.Funcs(funcMap).Parse(nt.Src))
 			i++
 		}
-		tname := generateTemplateName(basePath, path)
+		tname := generateTemplateName(rootPath, path)
 		templates[tname] = baseTmpl
 
 		// Make sure we empty the cache between runs
