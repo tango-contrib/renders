@@ -19,4 +19,12 @@ func (x *RenderAction) Get() {
         "test": "test",
     })
 }
+
+func main() {
+    t := tango.Classic()
+    t.Use(renders.New(renders.Options{
+        Reload: true,
+        Directory: "./templates",
+    }))
+}
 ```
