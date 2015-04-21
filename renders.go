@@ -317,7 +317,7 @@ func (r *Renderer) execute(name string, binding interface{}) (*bytes.Buffer, err
 	if rt, ok := r.t[name]; ok {
 		return buf, rt.ExecuteTemplate(buf, name, binding)
 	}
-	return nil, errors.New("template is not exist")
+	return nil, fmt.Errorf("template %s is not exist", name)
 }
 
 var (
