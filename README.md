@@ -28,3 +28,7 @@ func main() {
     }))
 }
 ```
+
+## License
+
+This project is under BSD License. See the [LICENSE](LICENSE) file for the full license text.
