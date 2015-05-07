@@ -6,6 +6,7 @@ package renders
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -65,7 +66,7 @@ func (a *RenderAction) Get() error {
 	})
 }
 
-func TestRender_1(t *testing.T) {
+func TestRender1(t *testing.T) {
 	buff := bytes.NewBufferString("")
 	recorder := httptest.NewRecorder()
 	recorder.Body = buff
@@ -105,7 +106,7 @@ func (a *Render2Action) AfterRender(name string) {
 	beforeAndAfter += " after " + name
 }
 
-func TestRender_2(t *testing.T) {
+func TestRender2(t *testing.T) {
 	buff := bytes.NewBufferString("")
 	recorder := httptest.NewRecorder()
 	recorder.Body = buff
@@ -134,7 +135,7 @@ func (a *Render3Action) Get() error {
 	return a.Render("admin/home.html", nil)
 }
 
-func TestRender_3(t *testing.T) {
+func TestRender3(t *testing.T) {
 	buff := bytes.NewBufferString("")
 	recorder := httptest.NewRecorder()
 	recorder.Body = buff
@@ -161,7 +162,7 @@ func (a *Render4Action) Get() error {
 	return a.Render("admin\\home.html", nil)
 }
 
-func TestRender_4(t *testing.T) {
+func TestRender4(t *testing.T) {
 	buff := bytes.NewBufferString("")
 	recorder := httptest.NewRecorder()
 	recorder.Body = buff
@@ -180,6 +181,72 @@ func TestRender_4(t *testing.T) {
 	o.ServeHTTP(recorder, req)
 	expect(t, recorder.Code, http.StatusOK)
 	expect(t, buff.String(), "admin")
+}
+
+type Render5Action struct {
+	Renderer
+}
+
+func (a *Render5Action) Get() error {
+	return a.Render("test2.html", T{
+		"name": "lunny",
+	})
+}
+
+func TestRender5(t *testing.T) {
+	buff := bytes.NewBufferString("")
+	recorder := httptest.NewRecorder()
+	recorder.Body = buff
+
+	o := tango.Classic()
+	o.Use(New(Options{
+		DelimsLeft:  "[[",
+		DelimsRight: "]]",
+		Reload:      true,
+	}))
+	o.Get("/", new(Render5Action))
+
+	req, err := http.NewRequest("GET", "http://localhost:3000/", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	o.ServeHTTP(recorder, req)
+	expect(t, recorder.Code, http.StatusOK)
+	expect(t, buff.String(), "Hello lunny!")
+}
+
+type Render6Action struct {
+	Renderer
+}
+
+func (a *Render6Action) Get() error {
+	return a.Render("test3.html", T{
+		"name": "lunny",
+	})
+}
+
+func TestRender6(t *testing.T) {
+	buff := bytes.NewBufferString("")
+	recorder := httptest.NewRecorder()
+	recorder.Body = buff
+
+	o := tango.Classic()
+	o.Use(New(Options{
+		DelimsLeft:  "[[",
+		DelimsRight: "]]",
+	}))
+	o.Get("/", new(Render6Action))
+
+	req, err := http.NewRequest("GET", "http://localhost:3000/", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	o.ServeHTTP(recorder, req)
+	expect(t, recorder.Code, http.StatusOK)
+	fmt.Println("output:", buff.String())
+	expect(t, buff.String(), "------ begin test2 ------\nHello lunny!\n------ end test2 ------")
 }
 
 /* Test Helpers */

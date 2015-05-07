@@ -256,10 +256,11 @@ type renderer struct {
 	delimsLeft, delimsRight string
 }
 
+/*
 func (r *Renderer) Delims(left, right string) *Renderer {
 	r.delimsLeft, r.delimsRight = left, right
 	return r
-}
+}*/
 
 // Render a template
 //     r.Render("index.html")
@@ -345,10 +346,18 @@ var (
 	regularTemplateDefs []string
 	lock                sync.Mutex
 	//re_defineTag        = regexp.MustCompile("{{ ?define \"([^\"]*)\" ?\"?([a-zA-Z0-9]*)?\"? ?}}")
-	re_defineTag = regexp.MustCompile("{{[ ]*define[ ]+\"([^\"]+)\"")
+	//re_defineTag = regexp.MustCompile("{{[ ]*define[ ]+\"([^\"]+)\"")
 	//re_templateTag      = regexp.MustCompile("{{ ?template \"([^\"]*)\" ?([^ ]*)? ?}}")
-	re_templateTag = regexp.MustCompile("{{[ ]*template[ ]+\"([^\"]+)\"")
+	//re_templateTag = regexp.MustCompile("{{[ ]*template[ ]+\"([^\"]+)\"")
 )
+
+func getReDefineTag(delimsLeft string) *regexp.Regexp {
+	return regexp.MustCompile(delimsLeft + "[ ]*define[ ]+\"([^\"]+)\"")
+}
+
+func getReTemplateTag(delimsLeft string) *regexp.Regexp {
+	return regexp.MustCompile(delimsLeft + "[ ]*template[ ]+\"([^\"]+)\"")
+}
 
 type namedTemplate struct {
 	Name string
@@ -357,13 +366,13 @@ type namedTemplate struct {
 
 // Load prepares and parses all templates from the passed basePath
 func Load(opt Options) (map[string]*template.Template, error) {
-	return loadTemplates(opt.Directory, opt.Extensions, nil)
+	return loadTemplates(opt.Directory, opt.Extensions, opt.DelimsLeft, opt.DelimsRight, nil)
 }
 
 // LoadWithFuncMap prepares and parses all templates from the passed basePath and injects
 // a custom template.FuncMap into each template
 func LoadWithFuncMap(opt Options) (map[string]*template.Template, error) {
-	return loadTemplates(opt.Directory, opt.Extensions, opt.Funcs)
+	return loadTemplates(opt.Directory, opt.Extensions, opt.DelimsLeft, opt.DelimsRight, opt.Funcs)
 }
 
 func alignTmplName(name string) string {
@@ -372,13 +381,16 @@ func alignTmplName(name string) string {
 	return name
 }
 
-func loadTemplates(basePath string, exts []string, funcMap template.FuncMap) (map[string]*template.Template, error) {
+func loadTemplates(basePath string, exts []string, delimsLeft, delimsRight string, funcMap template.FuncMap) (map[string]*template.Template, error) {
 	lock.Lock()
 	defer lock.Unlock()
 
 	templates := make(map[string]*template.Template)
 
 	rootPath, _ := filepath.Abs(basePath)
+
+	re_templateTag := getReTemplateTag(delimsLeft)
+	re_defineTag := getReDefineTag(delimsLeft)
 
 	err := filepath.Walk(rootPath, func(path string, fi os.FileInfo, err error) error {
 		if fi == nil || fi.IsDir() {
@@ -403,7 +415,7 @@ func loadTemplates(basePath string, exts []string, funcMap template.FuncMap) (ma
 			return nil
 		}
 
-		if err := add(rootPath, path); err != nil {
+		if err := add(rootPath, path, re_templateTag); err != nil {
 			panic(err)
 		}
 
@@ -411,6 +423,7 @@ func loadTemplates(basePath string, exts []string, funcMap template.FuncMap) (ma
 		for _, t := range regularTemplateDefs {
 			found := false
 			defineIdx := 0
+
 			// From the beginning (which should) most specifc we look for definitions
 			for _, nt := range cache {
 				nt.Src = re_defineTag.ReplaceAllStringFunc(nt.Src, func(raw string) string {
@@ -440,10 +453,10 @@ func loadTemplates(basePath string, exts []string, funcMap template.FuncMap) (ma
 		for _, nt := range cache {
 			var currentTmpl *template.Template
 			if i == 0 {
-				baseTmpl = template.New(nt.Name)
+				baseTmpl = template.New(nt.Name).Delims(delimsLeft, delimsRight)
 				currentTmpl = baseTmpl
 			} else {
-				currentTmpl = baseTmpl.New(nt.Name)
+				currentTmpl = baseTmpl.New(nt.Name).Delims(delimsLeft, delimsRight)
 			}
 
 			template.Must(currentTmpl.Funcs(funcMap).Parse(nt.Src))
@@ -460,7 +473,7 @@ func loadTemplates(basePath string, exts []string, funcMap template.FuncMap) (ma
 	return templates, err
 }
 
-func add(basePath, path string) error {
+func add(basePath, path string, re_templateTag *regexp.Regexp) error {
 	// Get file content
 	tplSrc, err := file_content(path)
 	if err != nil {
@@ -499,7 +512,7 @@ func add(basePath, path string) error {
 		}
 
 		// Add this template and continue looking for more template blocks
-		add(basePath, filepath.Join(basePath, templatePath))
+		add(basePath, filepath.Join(basePath, templatePath), re_templateTag)
 	}
 
 	return nil
