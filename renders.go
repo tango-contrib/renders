@@ -61,6 +61,8 @@ type Options struct {
 	Charset string
 	// Allows changing of output to XHTML instead of HTML. Default is "text/html"
 	HTMLContentType string
+	// default Delims
+	DelimsLeft, DelimsRight string
 }
 
 type Renders struct {
@@ -192,6 +194,8 @@ func (r *Renders) Handle(ctx *tango.Context) {
 				HTMLContentType: r.Options.HTMLContentType,
 				compiledCharset: r.cs,
 				Funcs:           make(template.FuncMap),
+				delimsLeft:      r.Options.DelimsLeft,
+				delimsRight:     r.Options.DelimsRight,
 			})
 		}
 	}
@@ -230,19 +234,31 @@ func prepareOptions(options []Options) Options {
 	if len(opt.HTMLContentType) == 0 {
 		opt.HTMLContentType = ContentHTML
 	}
+	if len(opt.DelimsLeft) == 0 {
+		opt.DelimsLeft = "{{"
+	}
+	if len(opt.DelimsRight) == 0 {
+		opt.DelimsRight = "}}"
+	}
 
 	return opt
 }
 
 type renderer struct {
-	ctx             *tango.Context
-	renders         *Renders
-	before, after   func(string)
-	t               map[string]*template.Template
-	compiledCharset string
-	Charset         string
-	HTMLContentType string
-	Funcs           template.FuncMap
+	ctx                     *tango.Context
+	renders                 *Renders
+	before, after           func(string)
+	t                       map[string]*template.Template
+	compiledCharset         string
+	Charset                 string
+	HTMLContentType         string
+	Funcs                   template.FuncMap
+	delimsLeft, delimsRight string
+}
+
+func (r *Renderer) Delims(left, right string) *Renderer {
+	r.delimsLeft, r.delimsRight = left, right
+	return r
 }
 
 // Render a template
@@ -319,7 +335,7 @@ func (r *Renderer) execute(name string, binding interface{}) (*bytes.Buffer, err
 	name = alignTmplName(name)
 
 	if rt, ok := r.t[name]; ok {
-		return buf, rt.ExecuteTemplate(buf, name, binding)
+		return buf, rt.Delims(r.delimsLeft, r.delimsRight).ExecuteTemplate(buf, name, binding)
 	}
 	return nil, fmt.Errorf("template %s is not exist", name)
 }
