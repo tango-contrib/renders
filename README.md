@@ -3,6 +3,10 @@ renders [![Build Status](https://drone.io/github.com/tango-contrib/renders/statu
 
 Middleware renders is a go template render middlewaer for [Tango](https://github.com/lunny/tango). 
 
+## Version
+
+   v0.2.0510 Added RenderBytes for Renderer and simplifed codes.
+
 ## Installation
 
     go get github.com/tango-contrib/renders

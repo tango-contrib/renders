@@ -87,15 +87,32 @@ func New(options ...Options) *Renders {
 }
 
 type IRenderer interface {
-	SetRenderer(render *renderer)
+	SetRenderer(*Renders, *tango.Context, func(string), func(string))
 }
 
 type Renderer struct {
-	*renderer
+	ctx                     *tango.Context
+	renders                 *Renders
+	before, after           func(string)
+	t                       map[string]*template.Template
+	compiledCharset         string
+	Charset                 string
+	HTMLContentType         string
+	Funcs                   template.FuncMap
+	delimsLeft, delimsRight string
 }
 
-func (r *Renderer) SetRenderer(render *renderer) {
-	r.renderer = render
+func (r *Renderer) SetRenderer(renders *Renders, ctx *tango.Context, before, after func(string)) {
+	r.renders = renders
+	r.ctx = ctx
+	r.before = before
+	r.after = after
+	r.t = renders.templates
+	r.HTMLContentType = renders.Options.HTMLContentType
+	r.compiledCharset = renders.cs
+	r.Funcs = make(template.FuncMap)
+	r.delimsLeft = renders.Options.DelimsLeft
+	r.delimsRight = renders.Options.DelimsRight
 }
 
 type Before interface {
@@ -104,14 +121,6 @@ type Before interface {
 
 type After interface {
 	AfterRender(string)
-}
-
-func (r *Renders) RenderString(name string, bindings ...interface{}) (string, error) {
-	buf, err := r.RenderBytes(name, bindings...)
-	if err != nil {
-		return "", err
-	}
-	return string(buf), nil
 }
 
 func (r *Renders) RenderBytes(name string, bindings ...interface{}) ([]byte, error) {
@@ -137,7 +146,7 @@ func (r *Renders) Render(w io.Writer, name string, bindings ...interface{}) erro
 		// recompile for easy development
 		r.templates, err = compile(r.Options)
 		if err != nil {
-			panic(err)
+			return err
 		}
 	}
 
@@ -174,29 +183,7 @@ func (r *Renders) Handle(ctx *tango.Context) {
 				after = a.AfterRender
 			}
 
-			var templates = r.templates
-
-			if r.Reload {
-				var err error
-				// recompile for easy development
-				templates, err = compile(r.Options)
-				if err != nil {
-					panic(err)
-				}
-			}
-
-			rd.SetRenderer(&renderer{
-				renders:         r,
-				ctx:             ctx,
-				before:          before,
-				after:           after,
-				t:               templates,
-				HTMLContentType: r.Options.HTMLContentType,
-				compiledCharset: r.cs,
-				Funcs:           make(template.FuncMap),
-				delimsLeft:      r.Options.DelimsLeft,
-				delimsRight:     r.Options.DelimsRight,
-			})
+			rd.SetRenderer(r, ctx, before, after)
 		}
 	}
 
@@ -244,24 +231,6 @@ func prepareOptions(options []Options) Options {
 	return opt
 }
 
-type renderer struct {
-	ctx                     *tango.Context
-	renders                 *Renders
-	before, after           func(string)
-	t                       map[string]*template.Template
-	compiledCharset         string
-	Charset                 string
-	HTMLContentType         string
-	Funcs                   template.FuncMap
-	delimsLeft, delimsRight string
-}
-
-/*
-func (r *Renderer) Delims(left, right string) *Renderer {
-	r.delimsLeft, r.delimsRight = left, right
-	return r
-}*/
-
 // Render a template
 //     r.Render("index.html")
 //     r.Render("index.html", renders.T{
@@ -269,6 +238,11 @@ func (r *Renderer) Delims(left, right string) *Renderer {
 //           })
 func (r *Renderer) Render(name string, bindings ...interface{}) error {
 	return r.StatusRender(http.StatusOK, name, bindings...)
+}
+
+// This method Will not called before & after method.
+func (r *Renderer) RenderBytes(name string, binding ...interface{}) ([]byte, error) {
+	return r.renders.RenderBytes(name, binding...)
 }
 
 func (r *Renderer) StatusRender(status int, name string, bindings ...interface{}) error {
@@ -440,7 +414,7 @@ func loadTemplates(basePath string, exts []string, delimsLeft, delimsRight strin
 
 					defineIdx += 1
 
-					return fmt.Sprintf("{{ define \"%s_invalidated_#%d\" }}", name, defineIdx)
+					return fmt.Sprintf(delimsLeft+" define \"%s_invalidated_#%d\" "+delimsRight, name, defineIdx)
 				})
 			}
 		}
@@ -528,6 +502,10 @@ func isNil(a interface{}) bool {
 
 func generateTemplateName(base, path string) string {
 	return alignTmplName(path[len(base)+1:])
+}
+
+func Version() string {
+	return "0.2.0510"
 }
 
 func file_content(path string) (string, error) {
