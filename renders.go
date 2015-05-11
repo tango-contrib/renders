@@ -257,6 +257,15 @@ func (r *Renderer) StatusRender(status int, name string, bindings ...interface{}
 		binding = t.Merge(r.renders.Options.Vars)
 	}
 
+	if r.renders.Reload {
+		var err error
+		// recompile for easy development
+		r.renders.templates, err = compile(r.renders.Options)
+		if err != nil {
+			return err
+		}
+	}
+
 	buf, err := r.execute(name, binding)
 	if err != nil {
 		return err
@@ -508,7 +517,7 @@ func generateTemplateName(base, path string) string {
 }
 
 func Version() string {
-	return "0.2.0510"
+	return "0.2.0511"
 }
 
 func file_content(path string) (string, error) {
