@@ -90,6 +90,9 @@ type IRenderer interface {
 	SetRenderer(*Renders, *tango.Context, func(string), func(string))
 }
 
+// confirm Renderer implements IRenderer
+var _ IRenderer = &Renderer{}
+
 type Renderer struct {
 	ctx                     *tango.Context
 	renders                 *Renders
