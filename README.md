@@ -27,8 +27,22 @@ func (x *RenderAction) Get() {
 func main() {
     t := tango.Classic()
     t.Use(renders.New(renders.Options{
-        Reload: true,
-        Directory: "./templates",
+        Reload: true, // if reload when template is changed
+        Directory: "./templates", // Directory to load templates
+        Funcs: template.FuncMap{
+            "test": func() string {
+                    return "test"
+            },
+        },
+        // Vars is a data map for global
+        Vars: renders.T{
+            "var": var,
+        }
+        Charset: "UTF-8", // Appends the given charset to the Content-Type header. Default is UTF-8
+        // Allows changing of output to XHTML instead of HTML. Default is "text/html"
+        HTMLContentType: "text/html",
+        DelimsLeft:"{{",
+        DelimsRight:"}}", // default Delims is {{}}, if it conflicts with your javascript template such as angluar, you can change it.
     }))
 }
 ```
