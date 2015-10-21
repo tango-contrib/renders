@@ -97,11 +97,9 @@ type Renderer struct {
 	ctx                     *tango.Context
 	renders                 *Renders
 	before, after           func(string)
-	t                       map[string]*template.Template
 	compiledCharset         string
 	Charset                 string
 	HTMLContentType         string
-	Funcs                   template.FuncMap
 	delimsLeft, delimsRight string
 }
 
@@ -110,10 +108,8 @@ func (r *Renderer) SetRenderer(renders *Renders, ctx *tango.Context, before, aft
 	r.ctx = ctx
 	r.before = before
 	r.after = after
-	r.t = renders.templates
 	r.HTMLContentType = renders.Options.HTMLContentType
 	r.compiledCharset = renders.cs
-	r.Funcs = make(template.FuncMap)
 	r.delimsLeft = renders.Options.DelimsLeft
 	r.delimsRight = renders.Options.DelimsRight
 }
@@ -166,7 +162,6 @@ func (r *Renders) Render(w io.Writer, name string, bindings ...interface{}) erro
 
 func (r *Renders) execute(name string, binding interface{}) (*bytes.Buffer, error) {
 	buf := r.pool.Get()
-
 	name = alignTmplName(name)
 
 	if rt, ok := r.templates[name]; ok {
@@ -302,15 +297,10 @@ func signature(funcs template.FuncMap) string {
 }
 
 func (r *Renderer) Template(name string) *template.Template {
-	return r.t[alignTmplName(name)]
+	return r.renders.templates[alignTmplName(name)]
 }
 
 func (r *Renderer) execute(name string, binding interface{}) (*bytes.Buffer, error) {
-	if len(r.Funcs) > 0 {
-		// TODO: if has temprory funcs, then should recompile templates,
-		// but the performance is lower.
-	}
-
 	buf := r.renders.pool.Get()
 	if r.before != nil {
 		r.before(name)
@@ -321,7 +311,7 @@ func (r *Renderer) execute(name string, binding interface{}) (*bytes.Buffer, err
 
 	name = alignTmplName(name)
 
-	if rt, ok := r.t[name]; ok {
+	if rt, ok := r.renders.templates[name]; ok {
 		return buf, rt.Delims(r.delimsLeft, r.delimsRight).ExecuteTemplate(buf, name, binding)
 	}
 	return nil, fmt.Errorf("template %s is not exist", name)
@@ -391,11 +381,10 @@ func loadTemplates(basePath string, exts []string, delimsLeft, delimsRight strin
 		ext := filepath.Ext(r)
 		var extRight bool
 		for _, extension := range exts {
-			if ext != extension {
-				continue
+			if ext == extension {
+				extRight = true
+				break
 			}
-			extRight = true
-			break
 		}
 		if !extRight {
 			return nil
@@ -517,7 +506,7 @@ func generateTemplateName(base, path string) string {
 }
 
 func Version() string {
-	return "0.2.0511"
+	return "0.3.1021"
 }
 
 func file_content(path string) (string, error) {
