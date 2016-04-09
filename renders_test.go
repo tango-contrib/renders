@@ -7,6 +7,8 @@ package renders
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -114,6 +116,56 @@ func TestRender2(t *testing.T) {
 	o := tango.Classic()
 	o.Use(New())
 	o.Get("/", new(Render2Action))
+
+	req, err := http.NewRequest("GET", "http://localhost:3000/", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	o.ServeHTTP(recorder, req)
+	expect(t, recorder.Code, http.StatusOK)
+	refute(t, len(buff.String()), 0)
+	expect(t, buff.String(), "Hello tango!")
+	expect(t, beforeAndAfter, "before test1.html after test1.html")
+	beforeAndAfter = ""
+}
+
+type Render22Action struct {
+	Renderer
+}
+
+func (a *Render22Action) Get() error {
+	return a.Render("test1.html", T{
+		"name": "tango",
+	})
+}
+
+func (a *Render22Action) BeforeRender(name string) {
+	beforeAndAfter += "before " + name
+}
+
+func (a *Render22Action) AfterRender(name string, rd io.Reader) {
+	beforeAndAfter += " after " + name
+	if rd != nil {
+		buf, err := ioutil.ReadAll(rd)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println(string(buf))
+	} else {
+		panic(fmt.Sprintln("rd should not be nil", rd))
+	}
+}
+
+func TestRender22(t *testing.T) {
+	buff := bytes.NewBufferString("")
+	recorder := httptest.NewRecorder()
+	recorder.Body = buff
+
+	o := tango.Classic()
+	o.Use(New())
+	o.Get("/", new(Render22Action))
 
 	req, err := http.NewRequest("GET", "http://localhost:3000/", nil)
 	if err != nil {

@@ -87,7 +87,7 @@ func New(options ...Options) *Renders {
 }
 
 type IRenderer interface {
-	SetRenderer(*Renders, *tango.Context, func(string), func(string))
+	SetRenderer(*Renders, *tango.Context, func(string), func(string), func(string, io.Reader))
 }
 
 // confirm Renderer implements IRenderer
@@ -97,17 +97,20 @@ type Renderer struct {
 	ctx                     *tango.Context
 	renders                 *Renders
 	before, after           func(string)
+	afterBuf                func(string, io.Reader)
 	compiledCharset         string
 	Charset                 string
 	HTMLContentType         string
 	delimsLeft, delimsRight string
 }
 
-func (r *Renderer) SetRenderer(renders *Renders, ctx *tango.Context, before, after func(string)) {
+func (r *Renderer) SetRenderer(renders *Renders, ctx *tango.Context,
+	before, after func(string), afterBuf func(string, io.Reader)) {
 	r.renders = renders
 	r.ctx = ctx
 	r.before = before
 	r.after = after
+	r.afterBuf = afterBuf
 	r.HTMLContentType = renders.Options.HTMLContentType
 	r.compiledCharset = renders.cs
 	r.delimsLeft = renders.Options.DelimsLeft
@@ -120,6 +123,10 @@ type Before interface {
 
 type After interface {
 	AfterRender(string)
+}
+
+type AfterBuf interface {
+	AfterRender(string, io.Reader)
 }
 
 func (r *Renders) RenderBytes(name string, bindings ...interface{}) ([]byte, error) {
@@ -151,6 +158,7 @@ func (r *Renders) Render(w io.Writer, name string, bindings ...interface{}) erro
 
 	buf, err := r.execute(name, binding)
 	if err != nil {
+		r.pool.Put(buf)
 		return err
 	}
 
@@ -167,21 +175,25 @@ func (r *Renders) execute(name string, binding interface{}) (*bytes.Buffer, erro
 	if rt, ok := r.templates[name]; ok {
 		return buf, rt.ExecuteTemplate(buf, name, binding)
 	}
-	return nil, errors.New("template is not exist")
+	return buf, errors.New("template is not exist")
 }
 
 func (r *Renders) Handle(ctx *tango.Context) {
 	if action := ctx.Action(); action != nil {
 		if rd, ok := action.(IRenderer); ok {
 			var before, after func(string)
+			var afterBuf func(string, io.Reader)
 			if b, ok := action.(Before); ok {
 				before = b.BeforeRender
 			}
 			if a, ok := action.(After); ok {
 				after = a.AfterRender
 			}
+			if a2, ok := action.(AfterBuf); ok {
+				afterBuf = a2.AfterRender
+			}
 
-			rd.SetRenderer(r, ctx, before, after)
+			rd.SetRenderer(r, ctx, before, after, afterBuf)
 		}
 	}
 
@@ -263,6 +275,7 @@ func (r *Renderer) StatusRender(status int, name string, bindings ...interface{}
 
 	buf, err := r.execute(name, binding)
 	if err != nil {
+		r.renders.pool.Put(buf)
 		return err
 	}
 
@@ -312,9 +325,21 @@ func (r *Renderer) execute(name string, binding interface{}) (*bytes.Buffer, err
 	name = alignTmplName(name)
 
 	if rt, ok := r.renders.templates[name]; ok {
-		return buf, rt.Delims(r.delimsLeft, r.delimsRight).ExecuteTemplate(buf, name, binding)
+		var rd io.Reader
+		err := rt.Delims(r.delimsLeft, r.delimsRight).ExecuteTemplate(buf, name, binding)
+		if err == nil {
+			rd = buf
+		}
+		if r.afterBuf != nil {
+			r.afterBuf(name, rd)
+			buf.Reset()
+		}
+		return buf, err
 	}
-	return nil, fmt.Errorf("template %s is not exist", name)
+	if r.afterBuf != nil {
+		r.afterBuf(name, nil)
+	}
+	return buf, fmt.Errorf("template %s is not exist", name)
 }
 
 var (
@@ -390,6 +415,10 @@ func loadTemplates(basePath string, exts []string, delimsLeft, delimsRight strin
 			return nil
 		}
 
+		defer func() {
+			cache = cache[0:0]
+		}()
+
 		if err := add(rootPath, path, re_templateTag); err != nil {
 			panic(err)
 		}
@@ -441,7 +470,7 @@ func loadTemplates(basePath string, exts []string, delimsLeft, delimsRight strin
 		templates[tname] = baseTmpl
 
 		// Make sure we empty the cache between runs
-		cache = cache[0:0]
+
 		return nil
 	})
 
@@ -450,7 +479,7 @@ func loadTemplates(basePath string, exts []string, delimsLeft, delimsRight strin
 
 func add(basePath, path string, re_templateTag *regexp.Regexp) error {
 	// Get file content
-	tplSrc, err := file_content(path)
+	tplSrc, err := fileContent(path)
 	if err != nil {
 		return err
 	}
@@ -509,7 +538,7 @@ func Version() string {
 	return "0.3.1021"
 }
 
-func file_content(path string) (string, error) {
+func fileContent(path string) (string, error) {
 	// Read the file content of the template
 	file, err := os.Open(path)
 	if err != nil {
