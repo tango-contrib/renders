@@ -325,14 +325,10 @@ func (r *Renderer) execute(name string, binding interface{}) (*bytes.Buffer, err
 	name = alignTmplName(name)
 
 	if rt, ok := r.renders.templates[name]; ok {
-		var rd io.Reader
 		err := rt.Delims(r.delimsLeft, r.delimsRight).ExecuteTemplate(buf, name, binding)
-		if err == nil {
-			rd = buf
-		}
-		if r.afterBuf != nil {
-			r.afterBuf(name, rd)
-			buf.Reset()
+		if err == nil && r.afterBuf != nil {
+			var tmpBuf = bytes.NewBuffer(buf.Bytes())
+			r.afterBuf(name, tmpBuf)
 		}
 		return buf, err
 	}
